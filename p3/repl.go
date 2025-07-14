@@ -58,7 +58,7 @@ const (
 const (
 	EXECUTE_SUCCESS ExecuteResult = iota
 	EXECUTE_UNKNOWN
-	EXECULTE_TABLE_FULL
+	EXECUTE_TABLE_FULL
 )
 
 var (
@@ -131,15 +131,15 @@ func do_meta_command(input string) MetaCommandResult {
 }
 
 func prepare_statement(input string, statement *Statement) PrepareCommandState {
-	if strings.Compare(input[:6], "insert") == 0 {
+	if len(input) >= 6 && strings.Compare(input[:6], "insert") == 0 {
 		statement.st = STATEMENT_INSERT
 		splits := strings.SplitN(input, " ", 4)
-		if len(splits) != 4 || splits[0] != "insert" {
+		if len(splits) != 4 {
 			panic("Bad input")
 		}
 		id, err := strconv.Atoi(splits[1])
 		if err != nil {
-			panic(err)
+			return PREPARE_SYNTAX_ERROR
 		}
 		statement.row_to_insert.id = uint32(id)
 		copy(statement.row_to_insert.username[:], splits[2])
@@ -148,7 +148,7 @@ func prepare_statement(input string, statement *Statement) PrepareCommandState {
 		fmt.Printf("row.id = %d\nrow.username = %s\nrow.email = %s\n", statement.row_to_insert.id, statement.row_to_insert.username, statement.row_to_insert.email)
 		return PREPARE_COMMAND_SUCCESS
 
-	} else if strings.Compare(input, "select") == 0 {
+	} else if len(input) >= 6 && strings.Compare(input, "select") == 0 {
 		statement.st = STATEMENT_SELECT
 		return PREPARE_COMMAND_SUCCESS
 	} else {
@@ -158,7 +158,7 @@ func prepare_statement(input string, statement *Statement) PrepareCommandState {
 
 func execute_insert(statement *Statement, table *Table) ExecuteResult {
 	if table.num_rows >= TABLE_MAX_ROWS {
-		return EXECULTE_TABLE_FULL
+		return EXECUTE_TABLE_FULL
 	}
 	serialize_row(&statement.row_to_insert, row_slot(table, table.num_rows))
 	table.num_rows += 1
@@ -204,7 +204,7 @@ func main() {
 			case META_COMMAND_SUCCESS:
 				continue
 			case META_COMMAND_UNRECOGNIZED_COMMAND:
-				fmt.Printf("Unrecognized command '%s'.\n", input)
+				fmt.Printf("Unrecognized command %s\n", input)
 				continue
 			}
 		}
@@ -216,7 +216,7 @@ func main() {
 			fmt.Println("Syntax error. Could not parse statement.")
 			continue
 		case PREPARE_COMMAND_UNRECOGNIZED_COMMAND:
-			fmt.Printf("Unrecognized keyword at start of '%s'\n", input)
+			fmt.Printf("Unrecognized keyword at start of %s\n", input)
 			continue
 		}
 		// var statement Statement
@@ -225,7 +225,7 @@ func main() {
 		switch execute_statement(statement, table) {
 		case EXECUTE_SUCCESS:
 			fmt.Printf("Executed\n")
-		case EXECULTE_TABLE_FULL:
+		case EXECUTE_TABLE_FULL:
 			fmt.Println("Error: Table full")
 		case EXECUTE_UNKNOWN:
 			fmt.Println("Error: Uknown error")

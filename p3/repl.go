@@ -3,8 +3,10 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -109,7 +111,7 @@ func row_slot(table *Table, row_num uint32) []byte {
 	page := table.pages[page_num]
 
 	if page == nil {
-		fmt.Println("Page was nil! allocating")
+		log.Println("INFO: row_slot: Page was nil! allocating")
 		page = &Page{} // allocate page
 		table.pages[page_num] = page
 	}
@@ -124,53 +126,79 @@ func print_prompt() {
 
 func do_meta_command(input string) MetaCommandResult {
 	if strings.Compare(input, ".exit") == 0 {
+		log.Println("INFO: do_meta_command: .exit:\nExiting the program...")
 		os.Exit(0)
 	}
+	if strings.Compare(input, ".help") == 0 {
+		log.Println("INFO: do_meta_command: .help:\nShowing help message...")
+		fmt.Println("Available commands:")
+		fmt.Println("\t.exit - Exit the program")
+		fmt.Println("\t.help - Show this help message")
+		fmt.Println("\tinsert <id> <username> <email> - Insert a new row")
+		fmt.Println("\tselect - Select all rows")
+		return META_COMMAND_SUCCESS
+	}
+	log.Printf("WARNING: do_meta_command: Unrecognized command %s\n", input)
 	return META_COMMAND_UNRECOGNIZED_COMMAND
 
 }
 
 func prepare_statement(input string, statement *Statement) PrepareCommandState {
-	if len(input) >= 6 && strings.Compare(input[:6], "insert") == 0 {
+	if len(input) >= 6 && strings.Compare(input, "insert") == 0 {
 		statement.st = STATEMENT_INSERT
 		splits := strings.SplitN(input, " ", 4)
 		if len(splits) != 4 {
-			panic("Bad input")
+			log.Printf("WARNING: prepare_statement: splits = %v, expected 4 parts", splits)
+			return PREPARE_SYNTAX_ERROR
 		}
 		id, err := strconv.Atoi(splits[1])
 		if err != nil {
+			log.Printf("WARNING: prepare_statement: id = %v is not numeric", splits[1])
 			return PREPARE_SYNTAX_ERROR
 		}
 		statement.row_to_insert.id = uint32(id)
 		copy(statement.row_to_insert.username[:], splits[2])
 		copy(statement.row_to_insert.email[:], splits[3])
 
-		fmt.Printf("row.id = %d\nrow.username = %s\nrow.email = %s\n", statement.row_to_insert.id, statement.row_to_insert.username, statement.row_to_insert.email)
+		log.Printf("INFO: prepare_statement: insert statement\n")
 		return PREPARE_COMMAND_SUCCESS
 
 	} else if len(input) >= 6 && strings.Compare(input, "select") == 0 {
 		statement.st = STATEMENT_SELECT
+		log.Println("INFO: prepare_statement: select statement")
 		return PREPARE_COMMAND_SUCCESS
 	} else {
+		log.Printf("WARNING: prepare_statement: Unrecognized command %s\n", input)
 		return PREPARE_COMMAND_UNRECOGNIZED_COMMAND
 	}
 }
 
 func execute_insert(statement *Statement, table *Table) ExecuteResult {
 	if table.num_rows >= TABLE_MAX_ROWS {
+		log.Println("ERROR: execute_insert: Table full")
 		return EXECUTE_TABLE_FULL
 	}
 	serialize_row(&statement.row_to_insert, row_slot(table, table.num_rows))
 	table.num_rows += 1
+
+	if table.num_rows > TABLE_MAX_ROWS {
+		log.Println("WARNING: execute_insert: Table full after insert")
+	}
+	log.Printf("INFO: execute_insert: Inserted row id = %d, username = %s, email = %s\n", statement.row_to_insert.id, string(statement.row_to_insert.username[:]), string(statement.row_to_insert.email[:]))
 	return EXECUTE_SUCCESS
 }
 
 func execute_select(st *Statement, table *Table) ExecuteResult {
 	row := &Row{}
+	if table.num_rows == 0 {
+		log.Println("INFO: execute_select: No rows to select")
+		return EXECUTE_SUCCESS
+	}
 	for i := 0; i < int(table.num_rows); i++ {
 		deserialize_row(row_slot(table, uint32(i)), row)
 		fmt.Printf("(%d %s %s)\n", row.id, string(row.username[:]), string(row.email[:]))
 	}
+	log.Printf("INFO: execute_select: Selected %d rows\n", table.num_rows)
 	return EXECUTE_SUCCESS
 }
 
@@ -185,6 +213,13 @@ func execute_statement(statement *Statement, table *Table) ExecuteResult {
 }
 
 func main() {
+	debugPtr := flag.Bool("debug", false, "Enable debug mode")
+	flag.Parse()
+	if *debugPtr {
+		log.SetOutput(os.Stdout)
+	} else {
+		log.SetOutput(io.Discard) // Disable debug output
+	}
 	table := &Table{}
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -213,10 +248,13 @@ func main() {
 		case PREPARE_COMMAND_SUCCESS:
 			break
 		case PREPARE_SYNTAX_ERROR:
-			fmt.Println("Syntax error. Could not parse statement.")
+			fmt.Println("Syntax error. Could not parse statement. Following are the valid commands:")
+			do_meta_command(".help")
+
 			continue
 		case PREPARE_COMMAND_UNRECOGNIZED_COMMAND:
-			fmt.Printf("Unrecognized keyword at start of %s\n", input)
+			fmt.Printf("Unrecognized keyword at start of %s. following are the valid commands:\n", input)
+			do_meta_command(".help")
 			continue
 		}
 		// var statement Statement

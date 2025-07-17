@@ -144,7 +144,7 @@ func do_meta_command(input string) MetaCommandResult {
 }
 
 func prepare_statement(input string, statement *Statement) PrepareCommandState {
-	if len(input) >= 6 && strings.Compare(input, "insert") == 0 {
+	if len(input) >= 6 && strings.Compare(input[:6], "insert") == 0 {
 		statement.st = STATEMENT_INSERT
 		splits := strings.SplitN(input, " ", 4)
 		if len(splits) != 4 {

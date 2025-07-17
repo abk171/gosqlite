@@ -90,6 +90,10 @@ func init() {
 
 	ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE
 	TABLE_MAX_ROWS = TABLE_MAX_PAGES * ROWS_PER_PAGE
+
+	log.Printf("INFO: init: ID_SIZE = %d, USERNAME_SIZE = %d, EMAIL_SIZE = %d\n", ID_SIZE, USERNAME_SIZE, EMAIL_SIZE)
+	log.Printf("INFO: init: ID_OFFSET = %d, USERNAME_OFFSET = %d, EMAIL_OFFSET = %d\n", ID_OFFSET, USERNAME_OFFSET, EMAIL_OFFSET)
+	log.Printf("INFO: init: ROW_SIZE = %d, ROWS_PER_PAGE = %d, TABLE_MAX_ROWS = %d\n", ROW_SIZE, ROWS_PER_PAGE, TABLE_MAX_ROWS)
 }
 
 func serialize_row(row *Row, destination []byte) {
@@ -263,8 +267,14 @@ func main() {
 		switch execute_statement(statement, table) {
 		case EXECUTE_SUCCESS:
 			fmt.Printf("Executed\n")
+			if *debugPtr {
+				log.Printf("INFO: execute_statement: Executed. Table now has %d rows\n", table.num_rows)
+			}
 		case EXECUTE_TABLE_FULL:
 			fmt.Println("Error: Table full")
+			if *debugPtr {
+				log.Println("ERROR: execute_statement: Table full")
+			}
 		case EXECUTE_UNKNOWN:
 			fmt.Println("Error: Uknown error")
 		}

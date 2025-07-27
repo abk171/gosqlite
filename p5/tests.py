@@ -47,7 +47,6 @@ def test_match():
     commands.extend(["select", ".exit"])
     
     results = run_script(commands)
-    print(f"Results: {results}")
     
     for result, output in zip(results, outputs):
         assert result == output, f"Expected: {output}, but got: {result}"
@@ -68,10 +67,10 @@ def test_insert_max_column_size(username_size=64, email_size=512):
                         email='a' * email_size + '@example.com')
     select_output = test_select(commands)
     outputs.extend(select_output)
-    print(f"select_output: {select_output}")
+    
     commands.extend(["select", ".exit"])
     result = run_script(commands)
-    print(f"Result: {result}")
+    
     for result, output in zip(result, select_output):
         assert result == output, f"Expected: {output}, but got: {result}"
 
@@ -84,8 +83,6 @@ def test_insert_persistence():
 
     select_results = run_script(['select', '.exit'])
 
-    print(f"Select Results: {select_results}")
-    print(f"Select Outputs: {select_outputs}")
 
     for result, output in zip(select_results, select_outputs):
         assert result == output, f"Expected: {output}, but got: {result}"

@@ -130,6 +130,7 @@ func db_open(filename string) *Table {
 		num_rows: numRows,
 		pager:    pager,
 	}
+	log.Printf("INFO: db_open: Opened database file %s with %d rows\n", filename, table.num_rows)
 	return table
 }
 
@@ -164,12 +165,12 @@ func pager_open(filename string) *Pager {
 	if err != nil {
 		log.Fatalf("ERROR: db_open: Could not open file %s: %v\n", filename, err)
 	}
-	fileInfo, err := f.Stat()
+	offset, err := f.Seek(0, io.SeekEnd) // Move to end of file, returns new offset
 	if err != nil {
-		log.Fatalf("ERROR: db_open: Could not stat file %s: %v\n", filename, err)
+		// handle error
 	}
-	f.Truncate(PAGE_SIZE * TABLE_MAX_PAGES) // Ensure the file is large enough
-	fileLength := uint32(fileInfo.Size())
+	log.Printf("INFO: pager_open: File %s opened, current offset is %d\n", filename, offset)
+	fileLength := uint32(offset)
 
 	pager := &Pager{
 		file_descriptor: f,
@@ -182,34 +183,25 @@ func get_page(pager *Pager, pageNum uint32) *Page {
 	if pageNum >= TABLE_MAX_PAGES {
 		log.Fatalf("ERROR: get_page: Page number %d exceeds maximum pages %d\n", pageNum, TABLE_MAX_PAGES)
 	}
-
 	if pager.pages[pageNum] == nil {
 		log.Printf("INFO: get_page: Page %d was nil! Allocating new page\n", pageNum)
 		page := &Page{}
-		numPages := pager.file_length / PAGE_SIZE
 
+		num_pages := pager.file_length / PAGE_SIZE
 		if pager.file_length%PAGE_SIZE != 0 {
-			numPages += 1 // if not a perfect multiple, we need an extra page
+			num_pages += 1
 		}
 
-		if pageNum <= numPages {
-			// read the page from the file
+		if pageNum < num_pages {
 			_, err := pager.file_descriptor.ReadAt(page.data[:], int64(pageNum*PAGE_SIZE))
-			if err != nil {
-				log.Fatalf("ERROR: get_page: Could not read page %d: %v\n", pageNum, err)
+			if err != nil && err != io.EOF {
+				log.Fatalf("ERROR: get_page: Could not read page %d from file: %v\n", pageNum, err)
 			}
 		}
 		pager.pages[pageNum] = page
-		log.Printf("INFO: get_page: Allocated new page %d\n", pageNum)
-		return page
-	}
 
-	page := pager.pages[pageNum]
-	if page == nil {
-		log.Fatalf("ERROR: get_page: Page %d is still nil after allocation\n", pageNum)
 	}
-
-	return page
+	return pager.pages[pageNum]
 }
 
 func print_prompt() {
@@ -341,6 +333,7 @@ func main() {
 		input := input_w_delim[:len(input_w_delim)-1]
 		if err != nil {
 			if err == io.EOF {
+				db_close(table)
 				break
 			}
 			// better error handling
